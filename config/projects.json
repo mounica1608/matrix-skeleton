@@ -1,26 +1,35 @@
 {
-  "exampleApp": {
-    "name": "example-app",
-    "displayName": "Example Application",
-    "githubRepo": "my-org/example-app",
-    "ecrRepositoryName": "example-app",
+  "casemaster": {
+    "name": "casemaster",
+    "displayName": "CaseMaster AI",
+    "githubRepo": "casemaster-code/casemaster",
+    "ecrRepositoryName": "casemaster",
     "containerPort": 8000,
     "healthCheckPath": "/health",
     "healthCheckInterval": 30,
     "healthCheckTimeout": 5,
     "healthyThresholdCount": 2,
     "unhealthyThresholdCount": 3,
-    "environments": ["dev", "staging", "production"],
+    "environments": ["dev"],
     "domains": {
-      "dev": "app-dev.example.com",
-      "staging": "app-staging.example.com",
-      "production": "app.example.com"
+      "dev": "casemaster-dev.example.com"
     },
     "alarmEmail": "alerts@example.com",
     "requiredEnvVars": [
-      "SECRET_KEY",
-      "DEBUG",
-      "DATABASE_URL"
+      "LLM_PROVIDER",
+      "LLM_MODEL",
+      "GEMINI_API_KEY",
+      "SUPABASE_URL",
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_KEY",
+      "SUPABASE_STORAGE_BUCKET",
+      "INDIAN_KANOON_API_TOKEN",
+      "CORS_ORIGINS",
+      "RESULTS_DIR",
+      "FAISS_DIR",
+      "CHUNK_PAGES",
+      "EMBED_MODEL",
+      "PDF_WATERMARK"
     ]
   }
 }

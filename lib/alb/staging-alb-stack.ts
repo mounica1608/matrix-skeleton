@@ -7,7 +7,7 @@ import { Construct } from 'constructs';
 export interface StagingAlbStackProps extends cdk.StackProps {
   vpc: ec2.IVpc;
   albSecurityGroup: ec2.ISecurityGroup;
-  certificate: acm.ICertificate;
+  certificate?: acm.ICertificate;
 }
 
 export class StagingAlbStack extends cdk.Stack {
@@ -37,16 +37,24 @@ export class StagingAlbStack extends cdk.Stack {
       }),
     });
 
-    // HTTPS listener - services add their own path/host rules
-    this.httpsListener = this.alb.addListener('HttpsListener', {
-      port: 443,
-      protocol: elbv2.ApplicationProtocol.HTTPS,
-      certificates: [props.certificate],
-      defaultAction: elbv2.ListenerAction.fixedResponse(404, {
-        contentType: 'text/plain',
-        messageBody: 'Not Found',
-      }),
-    });
+    // HTTPS listener - only created when certificate is provided
+    if (props.certificate) {
+      this.httpsListener = this.alb.addListener('HttpsListener', {
+        port: 443,
+        protocol: elbv2.ApplicationProtocol.HTTPS,
+        certificates: [props.certificate],
+        defaultAction: elbv2.ListenerAction.fixedResponse(404, {
+          contentType: 'text/plain',
+          messageBody: 'Not Found',
+        }),
+      });
+
+      new cdk.CfnOutput(this, 'HttpsListenerArn', {
+        value: this.httpsListener.listenerArn,
+        description: 'HTTPS Listener ARN',
+        exportName: 'StagingAlb:HttpsListenerArn',
+      });
+    }
 
     // Outputs
     new cdk.CfnOutput(this, 'AlbDns', {
@@ -65,12 +73,6 @@ export class StagingAlbStack extends cdk.Stack {
       value: this.httpListener.listenerArn,
       description: 'HTTP Listener ARN',
       exportName: 'StagingAlb:HttpListenerArn',
-    });
-
-    new cdk.CfnOutput(this, 'HttpsListenerArn', {
-      value: this.httpsListener.listenerArn,
-      description: 'HTTPS Listener ARN',
-      exportName: 'StagingAlb:HttpsListenerArn',
     });
 
     cdk.Tags.of(this).add('Stack', 'StagingAlbStack');

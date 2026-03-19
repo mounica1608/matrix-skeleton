@@ -8,6 +8,7 @@ import { PipelineStack } from '../lib/pipeline/pipeline-stack';
 import { StagingAlbStack } from '../lib/alb/staging-alb-stack';
 import { ProductionAlbStack } from '../lib/alb/production-alb-stack';
 import { DnsStack } from '../lib/shared/dns-stack';
+import { CloudFrontAlbStack } from '../lib/shared/cloudfront-alb-stack';
 import { ElastiCacheStack } from '../lib/shared/elasticache-stack';
 import { ScheduledTaskStack } from '../lib/shared/scheduled-task-stack';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -34,45 +35,45 @@ const networkingStack = new NetworkingStack(app, 'NetworkingStack', {
   tags: commonConfig.tags,
 });
 
-// ─── Certificates ────────────────────────────────────────────────────────────
-const stagingCertificateStack = new CertificateStack(
-  app,
-  'StagingCertificateStack',
-  {
-    env: env,
-    domainName: `*.${commonConfig.hostedZone.name}`,
-    hostedZoneId: commonConfig.hostedZone.id,
-    hostedZoneName: commonConfig.hostedZone.name,
-    description: 'Wildcard SSL certificate for staging and dev environments',
-    tags: {
-      ...commonConfig.tags,
-      Environment: 'staging',
-    },
-  }
-);
+// ─── Certificates (uncomment when domain is ready) ──────────────────────────
+// const stagingCertificateStack = new CertificateStack(
+//   app,
+//   'StagingCertificateStack',
+//   {
+//     env: env,
+//     domainName: `*.${commonConfig.hostedZone.name}`,
+//     hostedZoneId: commonConfig.hostedZone.id,
+//     hostedZoneName: commonConfig.hostedZone.name,
+//     description: 'Wildcard SSL certificate for staging and dev environments',
+//     tags: {
+//       ...commonConfig.tags,
+//       Environment: 'staging',
+//     },
+//   }
+// );
 
-const productionCertificateStack = new CertificateStack(
-  app,
-  'ProductionCertificateStack',
-  {
-    env: env,
-    domainName: `*.${commonConfig.hostedZone.name}`,
-    hostedZoneId: commonConfig.hostedZone.id,
-    hostedZoneName: commonConfig.hostedZone.name,
-    description: 'Wildcard SSL certificate for production environment',
-    tags: {
-      ...commonConfig.tags,
-      Environment: 'production',
-    },
-  }
-);
+// const productionCertificateStack = new CertificateStack(
+//   app,
+//   'ProductionCertificateStack',
+//   {
+//     env: env,
+//     domainName: `*.${commonConfig.hostedZone.name}`,
+//     hostedZoneId: commonConfig.hostedZone.id,
+//     hostedZoneName: commonConfig.hostedZone.name,
+//     description: 'Wildcard SSL certificate for production environment',
+//     tags: {
+//       ...commonConfig.tags,
+//       Environment: 'production',
+//     },
+//   }
+// );
 
 // ─── ALB Stacks ──────────────────────────────────────────────────────────────
+// No certificate — ALB will serve HTTP only for now
 const stagingAlbStack = new StagingAlbStack(app, 'StagingAlbStack', {
   env: env,
   vpc: networkingStack.vpc,
   albSecurityGroup: networkingStack.albSecurityGroup,
-  certificate: stagingCertificateStack.certificate,
   description: 'Shared ALB for staging and dev environments',
   tags: {
     ...commonConfig.tags,
@@ -80,188 +81,148 @@ const stagingAlbStack = new StagingAlbStack(app, 'StagingAlbStack', {
   },
 });
 stagingAlbStack.addDependency(networkingStack);
-stagingAlbStack.addDependency(stagingCertificateStack);
 
-const productionAlbStack = new ProductionAlbStack(app, 'ProductionAlbStack', {
+// ─── CloudFront (HTTPS proxy for staging ALB) ────────────────────────────────
+const cloudFrontAlbStack = new CloudFrontAlbStack(app, 'CloudFrontAlbStack', {
   env: env,
-  vpc: networkingStack.vpc,
-  albSecurityGroup: networkingStack.albSecurityGroup,
-  certificate: productionCertificateStack.certificate,
-  description: 'Shared ALB for production environment',
-  tags: {
-    ...commonConfig.tags,
-    Environment: 'production',
-  },
-});
-productionAlbStack.addDependency(networkingStack);
-productionAlbStack.addDependency(productionCertificateStack);
-
-// ─── Example App ─────────────────────────────────────────────────────────────
-// Shared resources (ECR, S3, SNS) for the example project
-const exampleAppSharedStack = new SharedResourcesStack(
-  app,
-  'ExampleAppSharedStack',
-  {
-    env: env,
-    projectName: projectsConfig.exampleApp.name,
-    ecrRepositoryName: projectsConfig.exampleApp.ecrRepositoryName,
-    alarmEmail: projectsConfig.exampleApp.alarmEmail,
-    description: 'Shared resources for Example App (ECR, S3, SNS)',
-    tags: {
-      ...commonConfig.tags,
-      Project: projectsConfig.exampleApp.name,
-    },
-  }
-);
-
-// Example App — Staging Pipeline
-const exampleAppStagingStack = new PipelineStack(
-  app,
-  'ExampleAppStagingStack',
-  {
-    env: env,
-    projectName: projectsConfig.exampleApp.name,
-    environment: stagingConfig.environment,
-    vpc: networkingStack.vpc,
-    ecsSecurityGroup: networkingStack.ecsSecurityGroup,
-    alb: stagingAlbStack.alb,
-    httpListener: stagingAlbStack.httpsListener,
-    listenerRulePriority: 100,
-    hostHeader: projectsConfig.exampleApp.domains.staging,
-    ecrRepository: exampleAppSharedStack.ecrRepository,
-    artifactBucket: exampleAppSharedStack.artifactBucket,
-    alarmTopic: exampleAppSharedStack.alarmTopic,
-    githubConnection: commonConfig.githubConnection,
-    githubRepo: projectsConfig.exampleApp.githubRepo,
-    githubBranch: stagingConfig.githubBranch,
-    containerPort: projectsConfig.exampleApp.containerPort,
-    healthCheckPath: projectsConfig.exampleApp.healthCheckPath,
-    requiredEnvVars: projectsConfig.exampleApp.requiredEnvVars,
-    fargateConfig: stagingConfig.fargate,
-    autoScalingConfig: stagingConfig.autoScaling,
-    loggingConfig: stagingConfig.logging,
-    description: 'CI/CD pipeline for Example App staging environment',
-    tags: {
-      ...commonConfig.tags,
-      Project: projectsConfig.exampleApp.name,
-      Environment: stagingConfig.environment,
-    },
-  }
-);
-exampleAppStagingStack.addDependency(stagingAlbStack);
-exampleAppStagingStack.addDependency(exampleAppSharedStack);
-
-// Example App — Production Pipeline
-const exampleAppProductionStack = new PipelineStack(
-  app,
-  'ExampleAppProductionStack',
-  {
-    env: env,
-    projectName: projectsConfig.exampleApp.name,
-    environment: productionConfig.environment,
-    vpc: networkingStack.vpc,
-    ecsSecurityGroup: networkingStack.ecsSecurityGroup,
-    alb: productionAlbStack.alb,
-    httpListener: productionAlbStack.httpsListener,
-    listenerRulePriority: 100,
-    hostHeader: projectsConfig.exampleApp.domains.production,
-    ecrRepository: exampleAppSharedStack.ecrRepository,
-    artifactBucket: exampleAppSharedStack.artifactBucket,
-    alarmTopic: exampleAppSharedStack.alarmTopic,
-    githubConnection: commonConfig.githubConnection,
-    githubRepo: projectsConfig.exampleApp.githubRepo,
-    githubBranch: productionConfig.githubBranch,
-    containerPort: projectsConfig.exampleApp.containerPort,
-    healthCheckPath: projectsConfig.exampleApp.healthCheckPath,
-    requiredEnvVars: projectsConfig.exampleApp.requiredEnvVars,
-    fargateConfig: productionConfig.fargate,
-    autoScalingConfig: productionConfig.autoScaling,
-    loggingConfig: productionConfig.logging,
-    description: 'CI/CD pipeline for Example App production environment',
-    tags: {
-      ...commonConfig.tags,
-      Project: projectsConfig.exampleApp.name,
-      Environment: productionConfig.environment,
-    },
-  }
-);
-exampleAppProductionStack.addDependency(productionAlbStack);
-exampleAppProductionStack.addDependency(exampleAppSharedStack);
-
-// ─── DNS ─────────────────────────────────────────────────────────────────────
-const stagingDnsStack = new DnsStack(app, 'StagingDnsStack', {
-  env: env,
-  hostedZoneId: commonConfig.hostedZone.id,
-  hostedZoneName: commonConfig.hostedZone.name,
-  records: [
-    {
-      subdomain: 'app-staging',
-      alb: stagingAlbStack.alb,
-    },
-  ],
-  description: 'Route53 DNS records for staging/dev domain-based services',
+  alb: stagingAlbStack.alb,
+  description: 'CloudFront HTTPS proxy for staging ALB',
   tags: {
     ...commonConfig.tags,
     Environment: 'staging',
   },
 });
-stagingDnsStack.addDependency(stagingAlbStack);
+cloudFrontAlbStack.addDependency(stagingAlbStack);
 
-const productionDnsStack = new DnsStack(app, 'ProductionDnsStack', {
-  env: env,
-  hostedZoneId: commonConfig.hostedZone.id,
-  hostedZoneName: commonConfig.hostedZone.name,
-  records: [
-    {
-      subdomain: 'app',
-      alb: productionAlbStack.alb,
-    },
-  ],
-  description: 'Route53 DNS records for production domain-based services',
-  tags: {
-    ...commonConfig.tags,
-    Environment: 'production',
-  },
-});
-productionDnsStack.addDependency(productionAlbStack);
-
-// ─── Optional: ElastiCache Redis (uncomment to use) ─────────────────────────
-// const exampleRedisStack = new ElastiCacheStack(app, 'ExampleAppRedisStack', {
+// Production ALB (uncomment when domain is ready)
+// const productionAlbStack = new ProductionAlbStack(app, 'ProductionAlbStack', {
 //   env: env,
 //   vpc: networkingStack.vpc,
-//   ecsSecurityGroup: networkingStack.ecsSecurityGroup,
-//   projectName: projectsConfig.exampleApp.name,
-//   environment: 'staging',
-//   description: 'ElastiCache Redis for Example App',
+//   albSecurityGroup: networkingStack.albSecurityGroup,
+//   certificate: productionCertificateStack.certificate,
+//   description: 'Shared ALB for production environment',
 //   tags: {
 //     ...commonConfig.tags,
-//     Project: projectsConfig.exampleApp.name,
+//     Environment: 'production',
+//   },
+// });
+// productionAlbStack.addDependency(networkingStack);
+// productionAlbStack.addDependency(productionCertificateStack);
+
+// ─── ElastiCache Redis (required by CaseMaster for Celery) ──────────────────
+const casemasterRedisStack = new ElastiCacheStack(app, 'CasemasterRedisStack', {
+  env: env,
+  vpc: networkingStack.vpc,
+  ecsSecurityGroup: networkingStack.ecsSecurityGroup,
+  projectName: projectsConfig.casemaster.name,
+  environment: 'dev',
+  description: 'ElastiCache Redis for CaseMaster (Celery broker + cache)',
+  tags: {
+    ...commonConfig.tags,
+    Project: projectsConfig.casemaster.name,
+    Environment: 'dev',
+  },
+});
+casemasterRedisStack.addDependency(networkingStack);
+
+// ─── CaseMaster AI ──────────────────────────────────────────────────────────
+// Shared resources (ECR, S3, SNS) for CaseMaster
+const casemasterSharedStack = new SharedResourcesStack(
+  app,
+  'CasemasterSharedStack',
+  {
+    env: env,
+    projectName: projectsConfig.casemaster.name,
+    ecrRepositoryName: projectsConfig.casemaster.ecrRepositoryName,
+    alarmEmail: projectsConfig.casemaster.alarmEmail,
+    description: 'Shared resources for CaseMaster AI (ECR, S3, SNS)',
+    tags: {
+      ...commonConfig.tags,
+      Project: projectsConfig.casemaster.name,
+    },
+  }
+);
+
+// CaseMaster — Dev Pipeline (using HTTP listener, path-based routing)
+const casemasterDevStack = new PipelineStack(
+  app,
+  'CasemasterDevStack',
+  {
+    env: env,
+    projectName: projectsConfig.casemaster.name,
+    environment: devConfig.environment,
+    vpc: networkingStack.vpc,
+    ecsSecurityGroup: networkingStack.ecsSecurityGroup,
+    alb: stagingAlbStack.alb,
+    httpListener: stagingAlbStack.httpListener,
+    listenerRulePriority: 100,
+    pathPattern: '/*',
+    ecrRepository: casemasterSharedStack.ecrRepository,
+    artifactBucket: casemasterSharedStack.artifactBucket,
+    alarmTopic: casemasterSharedStack.alarmTopic,
+    githubConnection: commonConfig.githubConnection,
+    githubRepo: projectsConfig.casemaster.githubRepo,
+    githubBranch: devConfig.githubBranch,
+    containerPort: projectsConfig.casemaster.containerPort,
+    healthCheckPath: projectsConfig.casemaster.healthCheckPath,
+    requiredEnvVars: projectsConfig.casemaster.requiredEnvVars,
+    fargateConfig: devConfig.fargate,
+    autoScalingConfig: devConfig.autoScaling,
+    loggingConfig: devConfig.logging,
+    redisEndpoint: casemasterRedisStack.redisEndpoint,
+    sidecars: [
+      {
+        name: 'celery-worker',
+        command: ['celery', '-A', 'app.main:celery', 'worker', '--loglevel=info', '--concurrency=2'],
+      },
+    ],
+    description: 'CI/CD pipeline for CaseMaster AI dev environment',
+    tags: {
+      ...commonConfig.tags,
+      Project: projectsConfig.casemaster.name,
+      Environment: devConfig.environment,
+    },
+  }
+);
+casemasterDevStack.addDependency(stagingAlbStack);
+casemasterDevStack.addDependency(casemasterSharedStack);
+casemasterDevStack.addDependency(casemasterRedisStack);
+
+// ─── DNS (uncomment when domain is ready) ────────────────────────────────────
+// const stagingDnsStack = new DnsStack(app, 'StagingDnsStack', {
+//   env: env,
+//   hostedZoneId: commonConfig.hostedZone.id,
+//   hostedZoneName: commonConfig.hostedZone.name,
+//   records: [
+//     {
+//       subdomain: 'casemaster-dev',
+//       alb: stagingAlbStack.alb,
+//     },
+//   ],
+//   description: 'Route53 DNS records for staging/dev domain-based services',
+//   tags: {
+//     ...commonConfig.tags,
 //     Environment: 'staging',
 //   },
 // });
-// exampleRedisStack.addDependency(networkingStack);
+// stagingDnsStack.addDependency(stagingAlbStack);
 
-// ─── Optional: Scheduled Task (uncomment to use) ────────────────────────────
-// const exampleCronStack = new ScheduledTaskStack(app, 'ExampleCronStack', {
+// const productionDnsStack = new DnsStack(app, 'ProductionDnsStack', {
 //   env: env,
-//   projectName: projectsConfig.exampleApp.name,
-//   environment: productionConfig.environment,
-//   vpc: networkingStack.vpc,
-//   ecsSecurityGroup: networkingStack.ecsSecurityGroup,
-//   ecrRepository: exampleAppSharedStack.ecrRepository,
-//   imageTag: productionConfig.environment,
-//   command: ['python', 'scripts/my_cron_job.py'],
-//   schedule: events.Schedule.rate(cdk.Duration.hours(2)),
-//   requiredEnvVars: ['DATABASE_URL'],
-//   loggingConfig: productionConfig.logging,
-//   description: 'Scheduled task: example cron job (every 2 hours)',
+//   hostedZoneId: commonConfig.hostedZone.id,
+//   hostedZoneName: commonConfig.hostedZone.name,
+//   records: [
+//     {
+//       subdomain: 'casemaster',
+//       alb: productionAlbStack.alb,
+//     },
+//   ],
+//   description: 'Route53 DNS records for production domain-based services',
 //   tags: {
 //     ...commonConfig.tags,
-//     Project: projectsConfig.exampleApp.name,
-//     Environment: productionConfig.environment,
+//     Environment: 'production',
 //   },
 // });
-// exampleCronStack.addDependency(networkingStack);
-// exampleCronStack.addDependency(exampleAppSharedStack);
+// productionDnsStack.addDependency(productionAlbStack);
 
 app.synth();

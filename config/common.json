@@ -1,8 +1,8 @@
 {
-  "accountId": "123456789012",
+  "accountId": "664251210614",
   "region": "ap-south-1",
   "organizationName": "my-org",
-  "githubConnection": "arn:aws:codeconnections:ap-south-1:123456789012:connection/REPLACE-WITH-YOUR-CONNECTION-ID",
+  "githubConnection": "arn:aws:codeconnections:ap-south-1:664251210614:connection/e71143a2-9348-4c7d-868f-8f0769aab639",
   "vpcCidr": "10.0.0.0/16",
   "enableVpcEndpoints": true,
   "hostedZone": {
