@@ -12,16 +12,15 @@
     "unhealthyThresholdCount": 3,
     "environments": ["dev"],
     "domains": {
-      "dev": "casemaster-dev.example.com"
+      "dev": "api-dev.casemaster.co.in"
     },
-    "alarmEmail": "alerts@example.com",
+    "alarmEmail": "mounica.patnana@gmail.com",
     "requiredEnvVars": [
       "LLM_PROVIDER",
       "LLM_MODEL",
       "GEMINI_API_KEY",
       "SUPABASE_URL",
       "SUPABASE_ANON_KEY",
-      "SUPABASE_SERVICE_KEY",
       "SUPABASE_STORAGE_BUCKET",
       "INDIAN_KANOON_API_TOKEN",
       "CORS_ORIGINS",
@@ -29,7 +28,8 @@
       "FAISS_DIR",
       "CHUNK_PAGES",
       "EMBED_MODEL",
-      "PDF_WATERMARK"
+      "PDF_WATERMARK",
+      "CLERK_DOMAIN"
     ]
   }
 }

@@ -8,7 +8,8 @@ import { PipelineStack } from '../lib/pipeline/pipeline-stack';
 import { StagingAlbStack } from '../lib/alb/staging-alb-stack';
 import { ProductionAlbStack } from '../lib/alb/production-alb-stack';
 import { DnsStack } from '../lib/shared/dns-stack';
-import { CloudFrontAlbStack } from '../lib/shared/cloudfront-alb-stack';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+
 import { ElastiCacheStack } from '../lib/shared/elasticache-stack';
 import { ScheduledTaskStack } from '../lib/shared/scheduled-task-stack';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -35,45 +36,29 @@ const networkingStack = new NetworkingStack(app, 'NetworkingStack', {
   tags: commonConfig.tags,
 });
 
-// ─── Certificates (uncomment when domain is ready) ──────────────────────────
-// const stagingCertificateStack = new CertificateStack(
-//   app,
-//   'StagingCertificateStack',
-//   {
-//     env: env,
-//     domainName: `*.${commonConfig.hostedZone.name}`,
-//     hostedZoneId: commonConfig.hostedZone.id,
-//     hostedZoneName: commonConfig.hostedZone.name,
-//     description: 'Wildcard SSL certificate for staging and dev environments',
-//     tags: {
-//       ...commonConfig.tags,
-//       Environment: 'staging',
-//     },
-//   }
-// );
-
-// const productionCertificateStack = new CertificateStack(
-//   app,
-//   'ProductionCertificateStack',
-//   {
-//     env: env,
-//     domainName: `*.${commonConfig.hostedZone.name}`,
-//     hostedZoneId: commonConfig.hostedZone.id,
-//     hostedZoneName: commonConfig.hostedZone.name,
-//     description: 'Wildcard SSL certificate for production environment',
-//     tags: {
-//       ...commonConfig.tags,
-//       Environment: 'production',
-//     },
-//   }
-// );
+// ─── Certificates ────────────────────────────────────────────────────────────
+const stagingCertificateStack = new CertificateStack(
+  app,
+  'StagingCertificateStack',
+  {
+    env: env,
+    domainName: `*.${commonConfig.hostedZone.name}`,
+    hostedZoneId: commonConfig.hostedZone.id,
+    hostedZoneName: commonConfig.hostedZone.name,
+    description: 'Wildcard SSL certificate for staging and dev environments',
+    tags: {
+      ...commonConfig.tags,
+      Environment: 'staging',
+    },
+  }
+);
 
 // ─── ALB Stacks ──────────────────────────────────────────────────────────────
-// No certificate — ALB will serve HTTP only for now
 const stagingAlbStack = new StagingAlbStack(app, 'StagingAlbStack', {
   env: env,
   vpc: networkingStack.vpc,
   albSecurityGroup: networkingStack.albSecurityGroup,
+  certificate: stagingCertificateStack.certificate,
   description: 'Shared ALB for staging and dev environments',
   tags: {
     ...commonConfig.tags,
@@ -81,18 +66,7 @@ const stagingAlbStack = new StagingAlbStack(app, 'StagingAlbStack', {
   },
 });
 stagingAlbStack.addDependency(networkingStack);
-
-// ─── CloudFront (HTTPS proxy for staging ALB) ────────────────────────────────
-const cloudFrontAlbStack = new CloudFrontAlbStack(app, 'CloudFrontAlbStack', {
-  env: env,
-  alb: stagingAlbStack.alb,
-  description: 'CloudFront HTTPS proxy for staging ALB',
-  tags: {
-    ...commonConfig.tags,
-    Environment: 'staging',
-  },
-});
-cloudFrontAlbStack.addDependency(stagingAlbStack);
+stagingAlbStack.addDependency(stagingCertificateStack);
 
 // Production ALB (uncomment when domain is ready)
 // const productionAlbStack = new ProductionAlbStack(app, 'ProductionAlbStack', {
@@ -143,7 +117,7 @@ const casemasterSharedStack = new SharedResourcesStack(
   }
 );
 
-// CaseMaster — Dev Pipeline (using HTTP listener, path-based routing)
+// CaseMaster — Dev Pipeline (HTTPS, host-based routing)
 const casemasterDevStack = new PipelineStack(
   app,
   'CasemasterDevStack',
@@ -154,9 +128,12 @@ const casemasterDevStack = new PipelineStack(
     vpc: networkingStack.vpc,
     ecsSecurityGroup: networkingStack.ecsSecurityGroup,
     alb: stagingAlbStack.alb,
-    httpListener: stagingAlbStack.httpListener,
+    httpListener: elbv2.ApplicationListener.fromApplicationListenerAttributes(app, 'ImportedHttpsListener', {
+      listenerArn: cdk.Fn.importValue('StagingAlb:HttpsListenerArn'),
+      securityGroup: networkingStack.albSecurityGroup,
+    }),
     listenerRulePriority: 100,
-    pathPattern: '/*',
+    hostHeader: projectsConfig.casemaster.domains.dev,
     ecrRepository: casemasterSharedStack.ecrRepository,
     artifactBucket: casemasterSharedStack.artifactBucket,
     alarmTopic: casemasterSharedStack.alarmTopic,
@@ -188,41 +165,23 @@ casemasterDevStack.addDependency(stagingAlbStack);
 casemasterDevStack.addDependency(casemasterSharedStack);
 casemasterDevStack.addDependency(casemasterRedisStack);
 
-// ─── DNS (uncomment when domain is ready) ────────────────────────────────────
-// const stagingDnsStack = new DnsStack(app, 'StagingDnsStack', {
-//   env: env,
-//   hostedZoneId: commonConfig.hostedZone.id,
-//   hostedZoneName: commonConfig.hostedZone.name,
-//   records: [
-//     {
-//       subdomain: 'casemaster-dev',
-//       alb: stagingAlbStack.alb,
-//     },
-//   ],
-//   description: 'Route53 DNS records for staging/dev domain-based services',
-//   tags: {
-//     ...commonConfig.tags,
-//     Environment: 'staging',
-//   },
-// });
-// stagingDnsStack.addDependency(stagingAlbStack);
-
-// const productionDnsStack = new DnsStack(app, 'ProductionDnsStack', {
-//   env: env,
-//   hostedZoneId: commonConfig.hostedZone.id,
-//   hostedZoneName: commonConfig.hostedZone.name,
-//   records: [
-//     {
-//       subdomain: 'casemaster',
-//       alb: productionAlbStack.alb,
-//     },
-//   ],
-//   description: 'Route53 DNS records for production domain-based services',
-//   tags: {
-//     ...commonConfig.tags,
-//     Environment: 'production',
-//   },
-// });
-// productionDnsStack.addDependency(productionAlbStack);
+// ─── DNS ─────────────────────────────────────────────────────────────────────
+const stagingDnsStack = new DnsStack(app, 'StagingDnsStack', {
+  env: env,
+  hostedZoneId: commonConfig.hostedZone.id,
+  hostedZoneName: commonConfig.hostedZone.name,
+  records: [
+    {
+      subdomain: 'api-dev',
+      alb: stagingAlbStack.alb,
+    },
+  ],
+  description: 'Route53 DNS records for staging/dev domain-based services',
+  tags: {
+    ...commonConfig.tags,
+    Environment: 'staging',
+  },
+});
+stagingDnsStack.addDependency(stagingAlbStack);
 
 app.synth();

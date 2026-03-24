@@ -220,6 +220,11 @@ export class PipelineStack extends cdk.Stack {
       redisEnvVars['CELERY_REDBEAT_REDIS_URL'] = `redis://${props.redisEndpoint}:6379/2`;
     }
 
+    // Shared ephemeral volume for data exchange between containers (uploads, results, etc.)
+    taskDefinition.addVolume({
+      name: 'shared-data',
+    });
+
     // Shared env + secrets for all containers in the task
     const sharedEnv = {
       ENVIRONMENT: props.environment,
@@ -229,7 +234,7 @@ export class PipelineStack extends cdk.Stack {
     const sharedSecrets = this.buildSecretsFromEnvVars(props.requiredEnvVars, ssmParameterPrefix);
 
     // Primary container — port-mapped and registered with ALB
-    taskDefinition.addContainer('AppContainer', {
+    const appContainer = taskDefinition.addContainer('AppContainer', {
       containerName: `${stackName}-container`,
       image: ecs.ContainerImage.fromEcrRepository(
         props.ecrRepository,
@@ -248,11 +253,16 @@ export class PipelineStack extends cdk.Stack {
         },
       ],
     });
+    appContainer.addMountPoints({
+      sourceVolume: 'shared-data',
+      containerPath: '/data',
+      readOnly: false,
+    });
 
     // Sidecar containers (e.g. celery worker, celery-beat)
     if (props.sidecars) {
       for (const sidecar of props.sidecars) {
-        taskDefinition.addContainer(`${sidecar.name}Container`, {
+        const sidecarContainer = taskDefinition.addContainer(`${sidecar.name}Container`, {
           containerName: `${stackName}-${sidecar.name}`,
           image: ecs.ContainerImage.fromEcrRepository(
             props.ecrRepository,
@@ -265,6 +275,11 @@ export class PipelineStack extends cdk.Stack {
           }),
           environment: sharedEnv,
           secrets: sharedSecrets,
+        });
+        sidecarContainer.addMountPoints({
+          sourceVolume: 'shared-data',
+          containerPath: '/data',
+          readOnly: false,
         });
       }
     }
@@ -322,6 +337,12 @@ export class PipelineStack extends cdk.Stack {
             value: props.environment,
           },
           IMAGE_TAG: {
+            value: props.environment,
+          },
+          PROJECT_NAME: {
+            value: props.projectName,
+          },
+          ENVIRONMENT: {
             value: props.environment,
           },
         },
