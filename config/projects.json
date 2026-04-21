@@ -29,7 +29,8 @@
       "CHUNK_PAGES",
       "EMBED_MODEL",
       "PDF_WATERMARK",
-      "CLERK_DOMAIN"
+      "CLERK_DOMAIN",
+      "SUPABASE_SERVICE_KEY"
     ]
   }
 }

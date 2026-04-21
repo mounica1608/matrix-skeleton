@@ -229,6 +229,8 @@ export class PipelineStack extends cdk.Stack {
     const sharedEnv = {
       ENVIRONMENT: props.environment,
       PROJECT_NAME: props.projectName,
+      LLM_MAX_OUTPUT_TOKENS: '8192',         // lower = faster map calls (min ~4096)
+      STRATEGY_MAX_OUTPUT_TOKENS: '32768', // strategy JSON can be large; gemini-2.5-flash thinking tokens eat into budget
       ...redisEnvVars,
     };
     const sharedSecrets = this.buildSecretsFromEnvVars(props.requiredEnvVars, ssmParameterPrefix);
