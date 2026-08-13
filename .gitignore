@@ -3,6 +3,14 @@
 *.d.ts
 node_modules
 
+# macOS
+.DS_Store
+
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+
+# Local AWS credentials - never commit
+.env.aws
+.env*.local
+.aws/
