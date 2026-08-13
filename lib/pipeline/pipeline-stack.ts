@@ -231,6 +231,27 @@ export class PipelineStack extends cdk.Stack {
       PROJECT_NAME: props.projectName,
       LLM_MAX_OUTPUT_TOKENS: '8192',         // lower = faster map calls (min ~4096)
       STRATEGY_MAX_OUTPUT_TOKENS: '32768', // strategy JSON can be large; gemini-2.5-flash thinking tokens eat into budget
+      LLM_CONCURRENCY: '5',                // max parallel LLM calls
+      TRANSLATION_BATCH_SIZE: '10',        // pages bundled per translation LLM call
+      JWT_LEEWAY_SECONDS: '120',
+      OLLAMA_URL: 'http://ollama:11434',   // only used when LLM_PROVIDER=ollama
+      // Retrieval / reranker tuning
+      EMBEDDING_MODEL: 'BAAI/bge-small-en-v1.5', // MUST match the model the dev precedent DB was re-embedded with
+      RERANK_ENABLED: 'true',              // defaults to false — set true to turn the reranker ON
+      RERANKER_MODEL: 'BAAI/bge-reranker-base',
+      RERANK_MIN_SCORE: '0.10',
+      RERANK_BATCH_SIZE: '64',
+      RERANK_TORCH_THREADS: '2',           // sized to dev's 1-vCPU task; raise for larger prod boxes
+      OMP_NUM_THREADS: '2',                // sized to dev's 1-vCPU task; raise for larger prod boxes
+      MKL_NUM_THREADS: '2',                // sized to dev's 1-vCPU task; raise for larger prod boxes
+      HYBRID_RETRIEVAL: 'true',
+      REPORT_CACHE_ENABLED: 'true',
+      PRECEDENT_IVFFLAT_PROBES: '30',
+      PRECEDENT_QUESTION_CONCURRENCY: '5',
+      // OTP / WhatsApp
+      OTP_PROVIDER: 'whatsapp_meta',       // or msg91
+      WHATSAPP_TEMPLATE_LANG: 'en_US',
+      WHATSAPP_GRAPH_VERSION: 'v21.0',
       ...redisEnvVars,
     };
     const sharedSecrets = this.buildSecretsFromEnvVars(props.requiredEnvVars, ssmParameterPrefix);

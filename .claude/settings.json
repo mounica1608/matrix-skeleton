@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx cdk *)",
+      "Bash(npm run *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(aws sts *)",
+      "Read(//usr/local/bin/**)",
+      "Bash(env)"
+    ]
+  }
+}
