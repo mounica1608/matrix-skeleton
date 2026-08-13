@@ -12,6 +12,7 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 
 import { ElastiCacheStack } from '../lib/shared/elasticache-stack';
 import { ScheduledTaskStack } from '../lib/shared/scheduled-task-stack';
+import { MonitoringStack } from '../lib/shared/monitoring-stack';
 import * as events from 'aws-cdk-lib/aws-events';
 
 // Import configuration
@@ -183,5 +184,40 @@ const stagingDnsStack = new DnsStack(app, 'StagingDnsStack', {
   },
 });
 stagingDnsStack.addDependency(stagingAlbStack);
+
+// ─── Monitoring ─────────────────────────────────────────────────────────────
+const monitoringStack = new MonitoringStack(app, 'MonitoringStack', {
+  env: env,
+  monitoringConfig: (commonConfig as any).monitoring,
+  ecsServices: [
+    {
+      projectName: projectsConfig.casemaster.name,
+      environment: devConfig.environment,
+      clusterName: `${projectsConfig.casemaster.name}-${devConfig.environment}-cluster`,
+      serviceName: `${projectsConfig.casemaster.name}-${devConfig.environment}-service`,
+      maxCapacity: devConfig.autoScaling.maxCapacity,
+    },
+  ],
+  codeBuildProjects: [
+    { projectName: `${projectsConfig.casemaster.name}-${devConfig.environment}-build` },
+  ],
+  logGroups: [
+    // ECS log group
+    { name: `/ecs/${projectsConfig.casemaster.name}-${devConfig.environment}` },
+    // CodeBuild log group
+    { name: `/aws/codebuild/${projectsConfig.casemaster.name}-${devConfig.environment}` },
+  ],
+  albs: [
+    { name: 'staging-shared-alb', alb: stagingAlbStack.alb },
+  ],
+  description: 'Infrastructure monitoring alarms, budget alerts, and cost controls',
+  tags: {
+    ...commonConfig.tags,
+    Stack: 'MonitoringStack',
+  },
+});
+monitoringStack.addDependency(networkingStack);
+monitoringStack.addDependency(stagingAlbStack);
+monitoringStack.addDependency(casemasterRedisStack);
 
 app.synth();

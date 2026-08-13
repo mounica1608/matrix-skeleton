@@ -13,5 +13,36 @@
     "ManagedBy": "CDK",
     "Organization": "my-org",
     "CostCenter": "Engineering"
+  },
+  "monitoring": {
+    "alarmEmail": "mounica.patnana@gmail.com",
+    "natGateway": {
+      "dailyBytesThresholdGB": 5
+    },
+    "cloudwatchLogs": {
+      "dailyBytesThresholdMB": 500
+    },
+    "codeBuild": {
+      "buildDurationThresholdMinutes": 15,
+      "dailyFailedBuildsThreshold": 5
+    },
+    "ecsTaskChurn": {
+      "runningTaskCountZeroPeriods": 2
+    },
+    "ecsAutoScaling": {
+      "maxCapacitySustainedMinutes": 30
+    },
+    "elastiCache": {
+      "memoryThresholdPercent": 80,
+      "cpuThresholdPercent": 70,
+      "clusterName": "casemaster-dev-redis"
+    },
+    "alb": {
+      "consumedLcuThreshold": 10
+    },
+    "budget": {
+      "monthlyLimitUSD": 500,
+      "alertThresholds": [80, 100, 120]
+    }
   }
 }
