@@ -2,6 +2,7 @@
   "accountId": "604938577991",
   "region": "ap-south-1",
   "organizationName": "my-org",
+  "computeMode": "ec2",
   "githubConnection": "arn:aws:codeconnections:ap-south-1:604938577991:connection/939b649c-d576-4035-aea1-e4d611ef7004",
   "vpcCidr": "10.0.0.0/16",
   "enableVpcEndpoints": true,

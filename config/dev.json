@@ -26,6 +26,14 @@
   "logging": {
     "retentionDays": 7
   },
+  "ec2": {
+    "instanceType": "t3.medium",
+    "nightlyShutdown": {
+      "enabled": true,
+      "shutdownCron": "30 19 * * ? *",
+      "startupCron": "30 0 * * ? *"
+    }
+  },
   "githubBranch": "dev",
   "codeBuild": {
     "computeType": "BUILD_GENERAL1_SMALL",
