@@ -14,7 +14,7 @@ export class NetworkingStack extends cdk.Stack {
     this.vpc = new ec2.Vpc(this, 'VPC', {
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 2,
-      natGateways: 1, // Single NAT Gateway for cost optimization
+      natGateways: 0, // No NAT Gateway — ECS runs in public subnets with public IPs instead
       subnetConfiguration: [
         {
           name: 'Public',

@@ -13,6 +13,9 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as appscaling from 'aws-cdk-lib/aws-applicationautoscaling';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as events_targets from 'aws-cdk-lib/aws-events-targets';
 import { Construct } from 'constructs';
 
 export interface SidecarContainer {
@@ -51,6 +54,13 @@ export interface PipelineStackProps extends cdk.StackProps {
     minCapacity: number;
     maxCapacity: number;
     targetCpuUtilization: number;
+    targetMemoryUtilization?: number;
+    nightlyShutdown?: {
+      enabled: boolean;
+      // Cron expressions are UTC. Values here are examples for 1am/6am IST.
+      shutdownCron: string;
+      startupCron: string;
+    };
   };
   loggingConfig: {
     retentionDays: number;
@@ -241,9 +251,9 @@ export class PipelineStack extends cdk.Stack {
       RERANKER_MODEL: 'BAAI/bge-reranker-base',
       RERANK_MIN_SCORE: '0.10',
       RERANK_BATCH_SIZE: '64',
-      RERANK_TORCH_THREADS: '2',           // sized to dev's 1-vCPU task; raise for larger prod boxes
-      OMP_NUM_THREADS: '2',                // sized to dev's 1-vCPU task; raise for larger prod boxes
-      MKL_NUM_THREADS: '2',                // sized to dev's 1-vCPU task; raise for larger prod boxes
+      RERANK_TORCH_THREADS: '1',           // sized to dev's 0.5-vCPU task; raise for larger prod boxes
+      OMP_NUM_THREADS: '1',                // sized to dev's 0.5-vCPU task; raise for larger prod boxes
+      MKL_NUM_THREADS: '1',                // sized to dev's 0.5-vCPU task; raise for larger prod boxes
       HYBRID_RETRIEVAL: 'true',
       REPORT_CACHE_ENABLED: 'true',
       PRECEDENT_IVFFLAT_PROBES: '30',
@@ -313,8 +323,8 @@ export class PipelineStack extends cdk.Stack {
       cluster: cluster,
       taskDefinition: taskDefinition,
       desiredCount: props.fargateConfig.desiredCount,
-      assignPublicIp: false,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      assignPublicIp: true,
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       securityGroups: [props.ecsSecurityGroup],
       healthCheckGracePeriod: cdk.Duration.seconds(60),
       minHealthyPercent: 50,
@@ -336,6 +346,34 @@ export class PipelineStack extends cdk.Stack {
         scaleInCooldown: cdk.Duration.seconds(60),
         scaleOutCooldown: cdk.Duration.seconds(60),
       });
+
+      // Memory is the real constraint for this workload (Celery workers
+      // loading embedding/reranker models per concurrent job), not CPU.
+      if (props.autoScalingConfig.targetMemoryUtilization) {
+        scaling.scaleOnMemoryUtilization('MemoryScaling', {
+          targetUtilizationPercent: props.autoScalingConfig.targetMemoryUtilization,
+          scaleInCooldown: cdk.Duration.seconds(60),
+          scaleOutCooldown: cdk.Duration.seconds(60),
+        });
+      }
+
+      // Nightly shutdown: lower min/max to 0 so the CPU/memory policies
+      // can't scale back up during the window, then restore at startup.
+      if (props.autoScalingConfig.nightlyShutdown?.enabled) {
+        const { shutdownCron, startupCron } = props.autoScalingConfig.nightlyShutdown;
+
+        scaling.scaleOnSchedule('NightlyShutdown', {
+          schedule: appscaling.Schedule.expression(`cron(${shutdownCron})`),
+          minCapacity: 0,
+          maxCapacity: 0,
+        });
+
+        scaling.scaleOnSchedule('MorningStartup', {
+          schedule: appscaling.Schedule.expression(`cron(${startupCron})`),
+          minCapacity: props.autoScalingConfig.minCapacity,
+          maxCapacity: props.autoScalingConfig.maxCapacity,
+        });
+      }
     }
 
     // CodeBuild Project
@@ -464,6 +502,55 @@ export class PipelineStack extends cdk.Stack {
       actionsEnabled: true,
     });
     unhealthyTargetAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(props.alarmTopic));
+
+    // Mute alarms that would otherwise false-fire during a scheduled
+    // nightly shutdown (RunningTaskCount=0 / no healthy targets is
+    // expected, not an incident, during that window).
+    if (props.autoScalingConfig?.nightlyShutdown?.enabled) {
+      const { shutdownCron, startupCron } = props.autoScalingConfig.nightlyShutdown;
+      const mutedAlarmNames = [
+        `infra-ecs-zero-tasks-${props.projectName}-${props.environment}`,
+        unhealthyTargetAlarm.alarmName,
+      ];
+
+      const muteRole = new iam.Role(this, 'AlarmMuteRole', {
+        roleName: `${stackName}-alarm-mute-role`,
+        assumedBy: new iam.ServicePrincipal('events.amazonaws.com'),
+      });
+      muteRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['cloudwatch:DisableAlarmActions', 'cloudwatch:EnableAlarmActions'],
+          resources: mutedAlarmNames.map(
+            (name) => `arn:aws:cloudwatch:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:alarm:${name}`
+          ),
+        })
+      );
+
+      new events.Rule(this, 'MuteAlarmsForShutdown', {
+        ruleName: `${stackName}-mute-alarms-shutdown`,
+        schedule: events.Schedule.expression(`cron(${shutdownCron})`),
+        targets: [
+          new events_targets.AwsApi({
+            service: 'CloudWatch',
+            action: 'disableAlarmActions',
+            parameters: { AlarmNames: mutedAlarmNames },
+          }),
+        ],
+      });
+
+      new events.Rule(this, 'UnmuteAlarmsForStartup', {
+        ruleName: `${stackName}-unmute-alarms-startup`,
+        schedule: events.Schedule.expression(`cron(${startupCron})`),
+        targets: [
+          new events_targets.AwsApi({
+            service: 'CloudWatch',
+            action: 'enableAlarmActions',
+            parameters: { AlarmNames: mutedAlarmNames },
+          }),
+        ],
+      });
+    }
 
     const pipelineFailureMetric = new cloudwatch.Metric({
       namespace: 'AWS/CodePipeline',

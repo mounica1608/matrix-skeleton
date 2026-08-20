@@ -11,6 +11,6 @@ node_modules
 cdk.out
 
 # Local AWS credentials - never commit
-.env.aws
+.env.aws*
 .env*.local
 .aws/

@@ -35,10 +35,29 @@
       "GROQ_API_KEY",
       "RAZORPAY_KEY_ID",
       "RAZORPAY_KEY_SECRET",
+      "RAZORPAY_WEBHOOK_SECRET",
       "ADMIN_API_KEY",
       "OTP_HASH_SECRET",
       "WHATSAPP_PHONE_NUMBER_ID",
-      "WHATSAPP_OTP_TEMPLATE"
-    ]
+      "WHATSAPP_OTP_TEMPLATE",
+      "WHATSAPP_CLOUD_TOKEN"
+    ],
+    "frontend": {
+      "name": "casemaster-fe",
+      "displayName": "CaseMaster AI Frontend",
+      "githubRepo": "casemaster-code/casemaster-fe",
+      "githubBranch": "master",
+      "environments": ["dev"],
+      "domains": {
+        "dev": "casemaster.co.in"
+      },
+      "frontendEnvVars": [
+        "VITE_API_BASE_URL",
+        "VITE_CLERK_PUBLISHABLE_KEY",
+        "VITE_SUPABASE_URL",
+        "VITE_SUPABASE_ANON_KEY",
+        "VITE_RAZORPAY_KEY_ID"
+      ]
+    }
   }
 }

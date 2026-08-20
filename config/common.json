@@ -1,12 +1,12 @@
 {
-  "accountId": "664251210614",
+  "accountId": "604938577991",
   "region": "ap-south-1",
   "organizationName": "my-org",
-  "githubConnection": "arn:aws:codeconnections:ap-south-1:664251210614:connection/6f4661eb-4133-430e-b758-c93b1e73a2f2",
+  "githubConnection": "arn:aws:codeconnections:ap-south-1:604938577991:connection/939b649c-d576-4035-aea1-e4d611ef7004",
   "vpcCidr": "10.0.0.0/16",
   "enableVpcEndpoints": true,
   "hostedZone": {
-    "id": "Z01411873NDFGMOIQ8BGE",
+    "id": "Z0007345AHZRW3FN1P0M",
     "name": "casemaster.co.in"
   },
   "tags": {

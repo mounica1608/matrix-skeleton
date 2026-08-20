@@ -5,6 +5,7 @@ import { NetworkingStack } from '../lib/networking/networking-stack';
 import { SharedResourcesStack } from '../lib/shared/shared-resources-stack';
 import { CertificateStack } from '../lib/shared/certificate-stack';
 import { PipelineStack } from '../lib/pipeline/pipeline-stack';
+import { FrontendStack } from '../lib/frontend/frontend-stack';
 import { StagingAlbStack } from '../lib/alb/staging-alb-stack';
 import { ProductionAlbStack } from '../lib/alb/production-alb-stack';
 import { DnsStack } from '../lib/shared/dns-stack';
@@ -166,6 +167,53 @@ casemasterDevStack.addDependency(stagingAlbStack);
 casemasterDevStack.addDependency(casemasterSharedStack);
 casemasterDevStack.addDependency(casemasterRedisStack);
 
+// ─── CaseMaster Frontend ─────────────────────────────────────────────────────
+// CloudFront requires its ACM certificate in us-east-1, regardless of the app's home region.
+const frontendCertificateStack = new CertificateStack(
+  app,
+  'FrontendCertificateStack',
+  {
+    env: { account: commonConfig.accountId, region: 'us-east-1' },
+    crossRegionReferences: true,
+    domainName: projectsConfig.casemaster.frontend.domains.dev,
+    hostedZoneId: commonConfig.hostedZone.id,
+    hostedZoneName: commonConfig.hostedZone.name,
+    description: 'us-east-1 SSL certificate for the CaseMaster frontend CloudFront distribution',
+    tags: {
+      ...commonConfig.tags,
+      Environment: 'staging',
+    },
+  }
+);
+
+const casemasterFrontendDevStack = new FrontendStack(
+  app,
+  'CasemasterFrontendDevStack',
+  {
+    env: env,
+    crossRegionReferences: true,
+    projectName: projectsConfig.casemaster.frontend.name,
+    ssmParameterPrefix: `${projectsConfig.casemaster.name}/${devConfig.environment}`,
+    environment: devConfig.environment,
+    domainName: projectsConfig.casemaster.frontend.domains.dev,
+    certificate: frontendCertificateStack.certificate,
+    artifactBucket: casemasterSharedStack.artifactBucket,
+    alarmTopic: casemasterSharedStack.alarmTopic,
+    githubConnection: commonConfig.githubConnection,
+    githubRepo: projectsConfig.casemaster.frontend.githubRepo,
+    githubBranch: projectsConfig.casemaster.frontend.githubBranch,
+    buildEnvVars: projectsConfig.casemaster.frontend.frontendEnvVars,
+    description: 'CI/CD pipeline and CloudFront hosting for CaseMaster AI frontend dev environment',
+    tags: {
+      ...commonConfig.tags,
+      Project: projectsConfig.casemaster.frontend.name,
+      Environment: devConfig.environment,
+    },
+  }
+);
+casemasterFrontendDevStack.addDependency(frontendCertificateStack);
+casemasterFrontendDevStack.addDependency(casemasterSharedStack);
+
 // ─── DNS ─────────────────────────────────────────────────────────────────────
 const stagingDnsStack = new DnsStack(app, 'StagingDnsStack', {
   env: env,
@@ -176,6 +224,10 @@ const stagingDnsStack = new DnsStack(app, 'StagingDnsStack', {
       subdomain: 'api-dev',
       alb: stagingAlbStack.alb,
     },
+    {
+      subdomain: '',
+      distribution: casemasterFrontendDevStack.distribution,
+    },
   ],
   description: 'Route53 DNS records for staging/dev domain-based services',
   tags: {
@@ -184,6 +236,7 @@ const stagingDnsStack = new DnsStack(app, 'StagingDnsStack', {
   },
 });
 stagingDnsStack.addDependency(stagingAlbStack);
+stagingDnsStack.addDependency(casemasterFrontendDevStack);
 
 // ─── Monitoring ─────────────────────────────────────────────────────────────
 const monitoringStack = new MonitoringStack(app, 'MonitoringStack', {

@@ -2,11 +2,13 @@ import * as cdk from 'aws-cdk-lib';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import { Construct } from 'constructs';
 
 export interface DnsRecordConfig {
   subdomain: string;
-  alb: elbv2.IApplicationLoadBalancer;
+  alb?: elbv2.IApplicationLoadBalancer;
+  distribution?: cloudfront.IDistribution;
 }
 
 export interface DnsStackProps extends cdk.StackProps {
@@ -29,22 +31,39 @@ export class DnsStack extends cdk.Stack {
       }
     );
 
-    // Create A records for each subdomain
+    // Create A records for each subdomain (empty subdomain = apex/bare domain)
     for (const record of props.records) {
-      const recordName = `${record.subdomain}.${props.hostedZoneName}`;
+      const recordName = record.subdomain
+        ? `${record.subdomain}.${props.hostedZoneName}`
+        : props.hostedZoneName;
+      const idSuffix = record.subdomain || 'apex';
 
-      new route53.ARecord(this, `ARecord-${record.subdomain}`, {
+      if (!record.alb && !record.distribution) {
+        throw new Error(
+          `DNS record for '${idSuffix}' must specify either 'alb' or 'distribution'`
+        );
+      }
+
+      const recordTarget = record.distribution
+        ? route53.RecordTarget.fromAlias(
+            new targets.CloudFrontTarget(record.distribution)
+          )
+        : route53.RecordTarget.fromAlias(
+            new targets.LoadBalancerTarget(record.alb!)
+          );
+
+      new route53.ARecord(this, `ARecord-${idSuffix}`, {
         zone: hostedZone,
         recordName: recordName,
-        target: route53.RecordTarget.fromAlias(
-          new targets.LoadBalancerTarget(record.alb)
-        ),
-        comment: `Managed by CDK - points to ALB for ${record.subdomain}`,
+        target: recordTarget,
+        comment: `Managed by CDK - points to ${
+          record.distribution ? 'CloudFront distribution' : 'ALB'
+        } for ${idSuffix}`,
       });
 
-      new cdk.CfnOutput(this, `DnsRecord-${record.subdomain}`, {
+      new cdk.CfnOutput(this, `DnsRecord-${idSuffix}`, {
         value: recordName,
-        description: `DNS record for ${record.subdomain}`,
+        description: `DNS record for ${idSuffix}`,
       });
     }
 

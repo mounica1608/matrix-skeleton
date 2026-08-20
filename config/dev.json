@@ -1,7 +1,7 @@
 {
   "environment": "dev",
   "fargate": {
-    "cpu": 1024,
+    "cpu": 512,
     "memory": 2048,
     "desiredCount": 1
   },
@@ -10,7 +10,12 @@
     "minCapacity": 1,
     "maxCapacity": 2,
     "targetCpuUtilization": 70,
-    "targetMemoryUtilization": 80
+    "targetMemoryUtilization": 70,
+    "nightlyShutdown": {
+      "enabled": true,
+      "shutdownCron": "30 19 * * ? *",
+      "startupCron": "30 0 * * ? *"
+    }
   },
   "alb": {
     "internetFacing": true,
