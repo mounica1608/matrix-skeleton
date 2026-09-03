@@ -44,6 +44,7 @@ REQUIRED_VARS=(
   WHATSAPP_PHONE_NUMBER_ID
   WHATSAPP_OTP_TEMPLATE
   WHATSAPP_CLOUD_TOKEN
+  CLERK_SECRET_KEY
 )
 
 # bash 3.2 (macOS default) has no associative arrays, so look up each

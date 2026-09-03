@@ -40,7 +40,8 @@
       "OTP_HASH_SECRET",
       "WHATSAPP_PHONE_NUMBER_ID",
       "WHATSAPP_OTP_TEMPLATE",
-      "WHATSAPP_CLOUD_TOKEN"
+      "WHATSAPP_CLOUD_TOKEN",
+      "CLERK_SECRET_KEY"
     ],
     "frontend": {
       "name": "casemaster-fe",

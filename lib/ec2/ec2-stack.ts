@@ -87,8 +87,22 @@ export class Ec2Stack extends cdk.Stack {
     instanceRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['ssm:GetParameters', 'ssm:GetParameter'],
+        // GetParametersByPath is what the CodeDeploy BeforeInstall hook
+        // uses to bulk-regenerate .env on every deploy (picks up newly
+        // added vars automatically); GetParameters/GetParameter are what
+        // user-data.sh uses at initial boot.
+        //
+        // IAM resource matching is literal-string wildcard matching, not
+        // path-prefix aware: "parameter/casemaster/dev/*" does NOT match
+        // the bare "parameter/casemaster/dev" ARN that GetParametersByPath
+        // checks when called with --path "/casemaster/dev" (no trailing
+        // slash) — the wildcard requires the literal "dev/" substring to
+        // already be present. Both the exact path and the wildcard are
+        // needed: the former for the --path argument itself, the latter
+        // for the individual parameters nested under it.
+        actions: ['ssm:GetParameters', 'ssm:GetParameter', 'ssm:GetParametersByPath'],
         resources: [
+          `arn:aws:ssm:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:parameter/${ssmParameterPrefix}`,
           `arn:aws:ssm:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:parameter/${ssmParameterPrefix}/*`,
         ],
       })
