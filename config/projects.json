@@ -57,7 +57,8 @@
         "VITE_CLERK_PUBLISHABLE_KEY",
         "VITE_SUPABASE_URL",
         "VITE_SUPABASE_ANON_KEY",
-        "VITE_RAZORPAY_KEY_ID"
+        "VITE_RAZORPAY_KEY_ID",
+        "VITE_CLARITY_PROJECT_ID"
       ]
     }
   }
