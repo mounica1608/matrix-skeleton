@@ -45,12 +45,43 @@ export class FrontendStack extends cdk.Stack {
       autoDeleteObjects: false,
     });
 
+    // The frontend build prerenders public routes to dist/<route>/index.html
+    // (casemaster-fe scripts/prerender.mjs). Rewrite extensionless request
+    // paths to <path>/index.html so those files are actually served — without
+    // this, /pricing falls through to the SPA fallback below and crawlers get
+    // the landing page's HTML (wrong title/canonical) on every route. Paths
+    // with no prerendered file (e.g. /dashboard) 403 at S3 and still hit the
+    // fallback, so SPA routing is unchanged for them.
+    const prerenderRewriteFn = new cloudfront.Function(this, 'PrerenderRewriteFn', {
+      functionName: `${stackName}-prerender-rewrite`,
+      comment: 'Rewrite extensionless paths to <path>/index.html for prerendered pages',
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+      code: cloudfront.FunctionCode.fromInline(`
+function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+  if (uri.endsWith('/')) {
+    request.uri = uri + 'index.html';
+  } else if (!uri.split('/').pop().includes('.')) {
+    request.uri = uri + '/index.html';
+  }
+  return request;
+}
+`.trim()),
+    });
+
     // CloudFront distribution (SPA routing: 403/404 -> index.html so client-side routes resolve)
     this.distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(this.siteBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        functionAssociations: [
+          {
+            function: prerenderRewriteFn,
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+          },
+        ],
       },
       domainNames: [props.domainName],
       certificate: props.certificate,
