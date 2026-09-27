@@ -27,7 +27,7 @@
     "retentionDays": 7
   },
   "ec2": {
-    "instanceType": "t3.medium",
+    "instanceType": "t3a.large",
     "nightlyShutdown": {
       "enabled": true,
       "shutdownCron": "30 19 * * ? *",
