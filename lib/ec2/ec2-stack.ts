@@ -100,10 +100,15 @@ export class Ec2Stack extends cdk.Stack {
         // already be present. Both the exact path and the wildcard are
         // needed: the former for the --path argument itself, the latter
         // for the individual parameters nested under it.
+        //
+        // LawConnect is part of the CaseMaster app but keeps its own
+        // parameters under /lawconnect/<env>, so it gets the same pair.
         actions: ['ssm:GetParameters', 'ssm:GetParameter', 'ssm:GetParametersByPath'],
         resources: [
           `arn:aws:ssm:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:parameter/${ssmParameterPrefix}`,
           `arn:aws:ssm:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:parameter/${ssmParameterPrefix}/*`,
+          `arn:aws:ssm:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:parameter/lawconnect/${props.ssmEnvironment || props.environment}`,
+          `arn:aws:ssm:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:parameter/lawconnect/${props.ssmEnvironment || props.environment}/*`,
         ],
       })
     );
