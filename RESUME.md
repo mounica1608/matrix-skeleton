@@ -45,7 +45,7 @@ Surviving CloudFormation stacks: `CasemasterSharedStack`, `CDKToolkit`. Cost ≈
 Prereqs: AWS CLI working, profile `my-profile` (account `664251210614`, region
 `ap-south-1`), and **the billing hold cleared** (else deploy may fail on suspended account).
 
-From the repo root (`/Users/kamakhya/matrix-skeleton`):
+From the repo root (`~/matrix-skeleton`):
 
 ```bash
 npm install            # if node_modules is missing

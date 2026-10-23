@@ -6,7 +6,7 @@
   domain move (see below) is complete.
 - **Backend live at:** `https://api-dev.casemaster.co.in` — ECS Fargate, healthy.
 - **Repo (frontend code):** `casemaster-code/casemaster-fe`, branch `master`, local clone at
-  `/Users/kamakhya/casemaster-fe`.
+  `~/casemaster-fe`.
 - Frontend deploy pipeline auto-builds on push to `master` via CodePipeline
   (`casemaster-fe-frontend-dev-pipeline`).
 - `app-dev.casemaster.co.in` no longer resolves — its DNS record and CloudFront alias were
